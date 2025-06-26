@@ -46,8 +46,14 @@ func TestScan(t *testing.T) {
 	}
 
 	// Verify logs
-	if len(mockLog.logs) < 2 || mockLog.logs[0] != "Found large file" || mockLog.logs[1] != "Found large file" {
-		t.Errorf("Logs = %v, want at least two 'Found large file' entries", mockLog.logs)
+	var foundCount int
+	for _, log := range mockLog.logs {
+		if log == "Found large file" {
+			foundCount++
+		}
+	}
+	if foundCount != 2 {
+		t.Errorf("Expected 2 'Found large file' logs, got %d. All logs: %v", foundCount, mockLog.logs)
 	}
 }
 
