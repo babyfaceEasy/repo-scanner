@@ -5,24 +5,25 @@ import (
 	"os"
 
 	"github.com/babyfaceeasy/repo-scanner/internal/config"
+	"github.com/babyfaceeasy/repo-scanner/internal/env"
 	"github.com/babyfaceeasy/repo-scanner/internal/github"
 	"github.com/babyfaceeasy/repo-scanner/internal/output"
 	"github.com/babyfaceeasy/repo-scanner/internal/scanner"
 	"github.com/babyfaceeasy/repo-scanner/internal/service"
 	"github.com/babyfaceeasy/repo-scanner/pkg/logger"
-	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
 
 func main() {
-	// load .env file
-	if err := godotenv.Load(); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to load .env file: %v\n", err)
+	// load environment variables
+	cfg, err := env.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load environment variables: %v\n", err)
 	}
 
 	// initialize logger
-	log, err := logger.New()
+	log, err := logger.New(cfg.LogEnv)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
 		os.Exit(1)
@@ -38,9 +39,10 @@ func main() {
 		Short: "Scan a repository for files larger than a specified size",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			retryClient := github.NewClient(cfg.GitHubToken, log)
 			svc := service.New(
 				config.New(),
-				github.NewClient(os.Getenv("GITHUB_TOKEN"), log),
+				retryClient,
 				scanner.New(log),
 				output.New(),
 				log,

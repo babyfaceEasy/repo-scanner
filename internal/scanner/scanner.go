@@ -37,11 +37,15 @@ func (s *Scanner) Scan(root string, sizeThreshold int64) (*model.Output, error) 
 			return nil // continue
 		}
 
+		s.logger.Debug("Scanning file", "path", path, "size", info.Size(), "threshold", sizeThreshold)
+
 		if info.Size() > sizeThreshold {
 			relPath, err := filepath.Rel(root, path)
 			if err != nil {
 				return fmt.Errorf("getting relative path for %s: %w", path, err)
 			}
+			s.logger.Info("Found large file", "path", relPath, "size", info.Size())
+
 			files = append(files, model.FileInfo{
 				Name: relPath,
 				Size: info.Size(),

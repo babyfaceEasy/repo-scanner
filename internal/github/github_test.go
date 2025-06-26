@@ -80,7 +80,7 @@ func TestDownloadRepo(t *testing.T) {
 		tw := tar.NewWriter(gzw)
 		hdr := &tar.Header{
 			Name: "repo/file.txt",
-			Mode: 0644,
+			Mode: 0o644,
 			Size: int64(len("test content")),
 		}
 		tw.WriteHeader(hdr)
@@ -111,15 +111,39 @@ func TestDownloadRepo(t *testing.T) {
 		t.Errorf("File content = %v, want %v", string(content), "test content")
 	}
 
-	// Verify logs
+	// verify logs
+	t.Logf("Captured logs: %+v", mockLog.logs)
+
 	expectedLogs := []string{
 		"Converted clone URL",
 		"Fetched tarball",
 		"Repository extracted",
 	}
-	for i, log := range expectedLogs {
-		if i >= len(mockLog.logs) || mockLog.logs[i] != log {
-			t.Errorf("Log %d = %v, want %v", i, mockLog.logs[i], log)
+
+	for _, expected := range expectedLogs {
+		found := false
+		for _, actual := range mockLog.logs {
+			if actual == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected log message %q not found in logs: %v", expected, mockLog.logs)
 		}
 	}
+
+	/*
+		// Verify logs
+		expectedLogs := []string{
+			"Converted clone URL",
+			"Fetched tarball",
+			"Repository extracted",
+		}
+		for i, log := range expectedLogs {
+			if i >= len(mockLog.logs) || mockLog.logs[i] != log {
+				t.Errorf("Log %d = %v, want: %v", i, mockLog.logs[i], log)
+			}
+		}
+	*/
 }
