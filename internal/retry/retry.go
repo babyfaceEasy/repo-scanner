@@ -52,10 +52,7 @@ func (r *Retrier) DownloadRepo(cloneURL, destDir string) error {
 
 // calculateDelay computes exponential backoff with jitter
 func (r *Retrier) calculateDelay(attempt int) time.Duration {
-	// Exponential backoff: baseDelay * 2^attempt
 	delay := r.baseDelay * time.Duration(1<<attempt)
-
-	// Add jitter: random duration between 0-100ms
 	jitter := time.Duration(rand.Intn(100)) * time.Millisecond
 
 	return delay + jitter

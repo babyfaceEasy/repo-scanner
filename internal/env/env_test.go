@@ -36,7 +36,7 @@ func TestLoad(t *testing.T) {
 }
 
 func TestLoadNoGitHubToken(t *testing.T) {
-	// Clear environment
+	// clear environment
 	os.Unsetenv("GITHUB_TOKEN")
 	os.Unsetenv("LOG_ENV")
 

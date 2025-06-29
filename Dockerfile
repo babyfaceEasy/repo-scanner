@@ -1,4 +1,4 @@
-FROM golang:1.20 AS builder
+FROM golang:1.24.4 AS builder
 
 WORKDIR /app
 
@@ -7,13 +7,12 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o /repo-scanner ./cmd/repo-scanner
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o repo-scanner ./cmd/repo-scanner
 
-FROM alpine:3.20
+FROM gcr.io/distroless/static-debian12
 
-COPY --from=builder /repo-scanner /usr/local/bin/
-COPY .env /app/.env
+USER nonroot:nonroot
 
-WORKDIR /app
+COPY --from=builder /app/repo-scanner /repo-scanner
 
-ENTRYPOINT ["/usr/local/bin/repo-scanner"]
+ENTRYPOINT ["/repo-scanner"]
