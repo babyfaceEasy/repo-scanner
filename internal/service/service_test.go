@@ -54,7 +54,7 @@ func TestScan(t *testing.T) {
 			// return os.Rename(tmpDir, destDir)
 		},
 	}
-	retryGH := retry.NewRetrier(mockGH, mockLog, 3, 10*time.Millisecond)
+	retryGH := retry.NewRetrier(mockGH, mockLog, 3, 10*time.Millisecond, 1*time.Second)
 
 	svc := New(
 		config.New(),
@@ -164,7 +164,7 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
-		
+
 		return os.WriteFile(target, data, info.Mode())
 	})
 }
