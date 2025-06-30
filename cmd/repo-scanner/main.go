@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/babyfaceeasy/repo-scanner/internal/config"
 	"github.com/babyfaceeasy/repo-scanner/internal/env"
 	"github.com/babyfaceeasy/repo-scanner/internal/github"
 	"github.com/babyfaceeasy/repo-scanner/internal/output"
+	"github.com/babyfaceeasy/repo-scanner/internal/retry"
 	"github.com/babyfaceeasy/repo-scanner/internal/scanner"
 	"github.com/babyfaceeasy/repo-scanner/internal/service"
 	"github.com/babyfaceeasy/repo-scanner/pkg/logger"
@@ -39,7 +41,9 @@ func main() {
 		Short: "Scan a repository for files larger than a specified size",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			retryClient := github.NewClient(cfg.GitHubToken, log)
+			githubClient := github.NewClient(cfg.GitHubToken, log)
+			// TODO: the variables been passed here can be converted to env variables.
+			retryClient := retry.NewRetrier(githubClient, log, 3, 1*time.Second, 15*time.Second)
 			svc := service.New(
 				config.New(),
 				retryClient,

@@ -2,17 +2,18 @@ package retry
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/babyfaceeasy/repo-scanner/internal/github"
 )
 
 type mockGitHubClient struct {
 	downloadFunc func(cloneURL, destDir string) error
-	attempts     int
 }
 
 func (m *mockGitHubClient) DownloadRepo(cloneURL, destDir string) error {
-	m.attempts++
 	return m.downloadFunc(cloneURL, destDir)
 }
 
@@ -26,77 +27,104 @@ func (m *mockLogger) Warn(msg string, fields ...interface{})  { m.logs = append(
 func (m *mockLogger) Debug(msg string, fields ...interface{}) { m.logs = append(m.logs, msg) }
 func (m *mockLogger) Fatal(msg string, fields ...interface{}) { m.logs = append(m.logs, msg) }
 
-func TestRetrier(t *testing.T) {
-	t.Run("Success on first attempt", func(t *testing.T) {
-		mockClient := &mockGitHubClient{
-			downloadFunc: func(cloneURL, destDir string) error { return nil },
-		}
-		mockLog := &mockLogger{}
-		retrier := NewRetrier(mockClient, mockLog, 3, 10*time.Millisecond, 1*time.Second)
-
-		err := retrier.DownloadRepo("url", "dir")
-		if err != nil {
-			t.Errorf("DownloadRepo() error = %v, want nil", err)
-		}
-		if mockClient.attempts != 1 {
-			t.Errorf("Attempts = %d, want 1", mockClient.attempts)
-		}
-	})
-
-	t.Run("Success after retries", func(t *testing.T) {
-		attempts := 0
-		mockClient := &mockGitHubClient{
-			downloadFunc: func(cloneURL, destDir string) error {
-				if attempts < 2 {
-					attempts++
-					return errors.New("rate limit")
+func TestRetrier_DownloadRepo(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupFunc     func(*int) func(string, string) error
+		wantErr       bool
+		wantAttempts  int
+		expectLogPart string
+	}{
+		{
+			name: "Immediate success",
+			setupFunc: func(attempts *int) func(string, string) error {
+				return func(cloneURL, destDir string) error {
+					*attempts++
+					return nil
 				}
-				return nil
 			},
-		}
-		mockLog := &mockLogger{}
-		retrier := NewRetrier(mockClient, mockLog, 3, 10*time.Millisecond, 1*time.Second)
+			wantErr:       false,
+			wantAttempts:  1,
+			expectLogPart: "Download succeeded",
+		},
+		{
+			name: "Success after retries",
+			setupFunc: func(attempts *int) func(string, string) error {
+				return func(cloneURL, destDir string) error {
+					*attempts++
+					if *attempts < 3 {
+						return &github.RetryAfterError{
+							Err:        errors.New("rate limit"),
+							RetryAfter: 10 * time.Millisecond,
+						}
+					}
+					return nil
+				}
+			},
+			wantErr:       false,
+			wantAttempts:  3,
+			expectLogPart: "Retrying after delay",
+		},
+		{
+			name: "Failure after max retries",
+			setupFunc: func(attempts *int) func(string, string) error {
+				return func(cloneURL, destDir string) error {
+					*attempts++
+					return &github.RetryAfterError{
+						Err:        errors.New("rate limit"),
+						RetryAfter: 10 * time.Millisecond,
+					}
+				}
+			},
+			wantErr:       true,
+			wantAttempts:  3,
+			expectLogPart: "Retrying after delay",
+		},
+		{
+			name: "Non-retryable error",
+			setupFunc: func(attempts *int) func(string, string) error {
+				return func(cloneURL, destDir string) error {
+					*attempts++
+					return errors.New("fatal config error")
+				}
+			},
+			wantErr:       true,
+			wantAttempts:  1,
+			expectLogPart: "Non-retryable error",
+		},
+	}
 
-		err := retrier.DownloadRepo("url", "dir")
-		if err != nil {
-			t.Errorf("DownloadRepo() error = %v, want nil", err)
-		}
-		if mockClient.attempts != 3 {
-			t.Errorf("Attempts = %d, want 3", mockClient.attempts)
-		}
-		if len(mockLog.logs) < 2 || mockLog.logs[0] != "Retrying after delay" {
-			t.Errorf("Logs = %v, want at least two 'Retrying after delay' entries", mockLog.logs)
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var attempts int
+			mockLog := &mockLogger{}
+			mockClient := &mockGitHubClient{}
 
-	t.Run("Max retries exceeded", func(t *testing.T) {
-		mockClient := &mockGitHubClient{
-			downloadFunc: func(cloneURL, destDir string) error { return errors.New("rate limit") },
-		}
-		mockLog := &mockLogger{}
-		retrier := NewRetrier(mockClient, mockLog, 2, 10*time.Millisecond, 1*time.Second)
+			mockClient.downloadFunc = tt.setupFunc(&attempts)
 
-		err := retrier.DownloadRepo("url", "dir")
-		if err == nil || err.Error() != "rate limit" {
-			t.Errorf("DownloadRepo() error = %v, want rate limit", err)
-		}
-		if mockClient.attempts != 3 {
-			t.Errorf("Attempts = %d, want 3", mockClient.attempts)
-		}
+			retrier := NewRetrier(mockClient, mockLog, 3, 10*time.Millisecond, 1*time.Second)
 
-		if !containsLog(mockLog.logs, "Max retries exceeded") {
-			t.Errorf("Logs = %v, want 'Max retries exceeded'", mockLog.logs)
-		}
-	})
+			err := retrier.DownloadRepo("https://github.com/owner/repo.git", "some/dest")
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DownloadRepo() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if attempts != tt.wantAttempts {
+				t.Errorf("attempts = %d, want %d", attempts, tt.wantAttempts)
+			}
+
+			if !containsLog(mockLog.logs, tt.expectLogPart) {
+				t.Errorf("Expected log containing %q, got logs: %v", tt.expectLogPart, mockLog.logs)
+			}
+		})
+	}
 }
 
-
-func containsLog(logs []string, want string) bool {
-	for _, l := range logs {
-		if l == want {
+func containsLog(logs []string, substr string) bool {
+	for _, log := range logs {
+		if strings.Contains(log, substr) {
 			return true
 		}
 	}
-
 	return false
 }

@@ -155,7 +155,7 @@ func (c *Client) DownloadRepo(cloneURL, destDir string) error {
 }
 
 func (c *Client) getTarballStream(cloneURL string) (io.ReadCloser, error) {
-	tarballURL, err := cloneURLToTarballURL(cloneURL)
+	tarballURL, err := c.cloneURLToTarballURL(cloneURL)
 	if err != nil {
 		return nil, fmt.Errorf("converting clone URL: %w", err)
 	}
