@@ -1,16 +1,21 @@
 # repo-scanner
 
 ## Introduction
-`repo-scanner` is a command-line tool written in Go that scans GitHub repositories to identify and report files exceeding a specified size threshold. The application fetches repositories via the GitHub API, extracts files, scans them locally, and outputs results in JSON format.
+`repo-scanner` is a robust command-line tool written in Go that scans GitHub repositories to identify and report files exceeding a specified size threshold. It fetches repositories via the GitHub API, supports automatic retries with exponential backoff for transient errors and rate-limiting (HTTP 429), and respects GitHub's `Retry-After` headers.
+
+The tool extracts repositories locally using a concurrent and secure tarball extraction mechanism, ensuring efficient file processing while guarding against path traversal attacks. Results are outputted in JSON format for easy parsing and integration with other tools.
 
 Key features:
 - **Structured Logging**: Uses `zerolog` for JSON or human-readable logs, configurable via environment variables, implemented in a reusable `pkg/logger` package.
 - **Fault Tolerance**: Handles GitHub API rate limits with a retry decorator and exponential backoff.
+- **Concurrent Extraction**: Utilizes worker pools to speed up tarball processing.
+- **Secure File Handling**: Defends against path traversal in extracted files.
 - **Modular Design**: Employs dependency injection and interfaces for testability and extensibility.
 - **Environment Management**: Centralizes configuration in an `env` package for robust `.env` handling.
 - **Docker Support**: Packaged as a lightweight Docker image for consistent deployment.
+- **Extensive Tests**: Covers client behavior, retry logic, and extraction flow using mocks.
+- **JSON Output**: Emits scan results in structured JSON for automation or further analysis.
 
-This project showcases production-grade Go practices, including clean architecture, comprehensive tests, and observability, making it suitable for real-world use cases.
 
 ## Table of Contents
 - [repo-scanner](#repo-scanner)

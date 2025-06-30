@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 type mockLogger struct {
@@ -116,34 +117,136 @@ func TestDownloadRepo(t *testing.T) {
 
 	expectedLogs := []string{
 		"Converted clone URL",
-		"Fetched tarball",
+		"tarball stream got successfully",
+		"about to call extract tarball",
 		"Repository extracted",
 	}
 
 	for _, expected := range expectedLogs {
 		found := false
 		for _, actual := range mockLog.logs {
-			if actual == expected {
+			if strings.Contains(actual, expected) {
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Errorf("Expected log message %q not found in logs: %v", expected, mockLog.logs)
+			t.Errorf("Expected log message containing %q not found in logs: %v", expected, mockLog.logs)
 		}
 	}
+}
 
-	/*
-		// Verify logs
-		expectedLogs := []string{
-			"Converted clone URL",
-			"Fetched tarball",
-			"Repository extracted",
+func TestDownloadRepo_WithMultipleFiles(t *testing.T) {
+	mockLog := &mockLogger{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/gzip")
+		gzw := gzip.NewWriter(w)
+		tw := tar.NewWriter(gzw)
+
+		files := map[string]string{
+			"repo/file1.txt":     "hello world",
+			"repo/dir/file2.txt": "another file",
 		}
-		for i, log := range expectedLogs {
-			if i >= len(mockLog.logs) || mockLog.logs[i] != log {
-				t.Errorf("Log %d = %v, want: %v", i, mockLog.logs[i], log)
+
+		for name, content := range files {
+			hdr := &tar.Header{
+				Name: name,
+				Mode: 0o644,
+				Size: int64(len(content)),
 			}
+			tw.WriteHeader(hdr)
+			tw.Write([]byte(content))
 		}
-	*/
+
+		tw.Close()
+		gzw.Close()
+	}))
+	defer server.Close()
+
+	client := NewClient("test-token", mockLog)
+	client.cloneURLToTarballURL = func(_ string) (string, error) {
+		return server.URL + "/repos/owner/repo/tarball", nil
+	}
+
+	tmpDir := t.TempDir()
+	err := client.DownloadRepo("https://github.com/owner/repo.git", tmpDir)
+	if err != nil {
+		t.Fatalf("DownloadRepo() error: %v", err)
+	}
+
+	assertFileContent(t, filepath.Join(tmpDir, "file1.txt"), "hello world")
+	assertFileContent(t, filepath.Join(tmpDir, "dir/file2.txt"), "another file")
+}
+
+func TestDownloadRepo_Security_PathTraversal(t *testing.T) {
+	mockLog := &mockLogger{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/gzip")
+		gzw := gzip.NewWriter(w)
+		tw := tar.NewWriter(gzw)
+
+		// Dangerous path
+		hdr := &tar.Header{
+			Name: "repo/../malicious.txt",
+			Mode: 0o644,
+			Size: int64(len("malicious content")),
+		}
+		tw.WriteHeader(hdr)
+		tw.Write([]byte("malicious content"))
+
+		tw.Close()
+		gzw.Close()
+	}))
+	defer server.Close()
+
+	client := NewClient("test-token", mockLog)
+	client.cloneURLToTarballURL = func(_ string) (string, error) {
+		return server.URL + "/repos/owner/repo/tarball", nil
+	}
+
+	tmpDir := t.TempDir()
+	err := client.DownloadRepo("https://github.com/owner/repo.git", tmpDir)
+	if err == nil || !strings.Contains(err.Error(), "illegal file path") {
+		t.Fatalf("expected path traversal error, got: %v", err)
+	}
+}
+
+func TestDownloadRepo_429RetryAfter(t *testing.T) {
+	mockLog := &mockLogger{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Header().Set("Retry-After", "3")
+	}))
+	defer server.Close()
+
+	client := NewClient("test-token", mockLog)
+	client.cloneURLToTarballURL = func(_ string) (string, error) {
+		return server.URL + "/repos/owner/repo/tarball", nil
+	}
+
+	tmpDir := t.TempDir()
+	err := client.DownloadRepo("https://github.com/owner/repo.git", tmpDir)
+	if err == nil {
+		t.Fatal("expected RetryAfterError, got nil")
+	}
+
+	retryErr, ok := err.(*RetryAfterError)
+	if !ok {
+		t.Fatalf("expected RetryAfterError, got %T", err)
+	}
+
+	if retryErr.RetryAfter != 3*time.Second {
+		t.Errorf("expected RetryAfter = 3s, got %v", retryErr.RetryAfter)
+	}
+}
+
+func assertFileContent(t *testing.T, path string, expected string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("Failed to read file %s: %v", path, err)
+	}
+	if string(data) != expected {
+		t.Errorf("File content at %s = %q, want %q", path, data, expected)
+	}
 }
