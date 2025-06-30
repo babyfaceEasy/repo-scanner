@@ -32,7 +32,7 @@ func TestRetrier(t *testing.T) {
 			downloadFunc: func(cloneURL, destDir string) error { return nil },
 		}
 		mockLog := &mockLogger{}
-		retrier := NewRetrier(mockClient, mockLog, 3, 10*time.Millisecond)
+		retrier := NewRetrier(mockClient, mockLog, 3, 10*time.Millisecond, 1*time.Second)
 
 		err := retrier.DownloadRepo("url", "dir")
 		if err != nil {
@@ -55,7 +55,7 @@ func TestRetrier(t *testing.T) {
 			},
 		}
 		mockLog := &mockLogger{}
-		retrier := NewRetrier(mockClient, mockLog, 3, 10*time.Millisecond)
+		retrier := NewRetrier(mockClient, mockLog, 3, 10*time.Millisecond, 1*time.Second)
 
 		err := retrier.DownloadRepo("url", "dir")
 		if err != nil {
@@ -74,7 +74,7 @@ func TestRetrier(t *testing.T) {
 			downloadFunc: func(cloneURL, destDir string) error { return errors.New("rate limit") },
 		}
 		mockLog := &mockLogger{}
-		retrier := NewRetrier(mockClient, mockLog, 2, 10*time.Millisecond)
+		retrier := NewRetrier(mockClient, mockLog, 2, 10*time.Millisecond, 1*time.Second)
 
 		err := retrier.DownloadRepo("url", "dir")
 		if err == nil || err.Error() != "rate limit" {
