@@ -274,9 +274,9 @@ go test ./internal/... ./pkg/...
 
 Key test areas:
 - `env`: Validates `.env` loading and error cases.
-- `logger`: Verifies log levels and output formats.
-- `github`: Mocks GitHub API responses for `DownloadRepo`.
-- `retry`: Tests retry logic with success, partial failure, and max retries.
+- `logger`: Verifies log levels, formatting, and output handling.
+- `github`: Mocks GitHub API responses for `DownloadRepo` behavior, including tarball handling.
+- `retry`: Covers retry logic for transient errors, success-after-retries, and max retry exhaustion.
 - `scanner`: Simulates file systems to verify large file detection.
 - `service`: Integrates components with mocked dependencies.
 - `config`, `model`, `output`: Validate parsing, serialization, and output.
