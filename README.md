@@ -46,7 +46,7 @@ Key features:
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/yourusername/repo-scanner.git
+   git clone https://github.com/babyfaceEasy/repo-scanner.git
    cd repo-scanner
    ```
 
