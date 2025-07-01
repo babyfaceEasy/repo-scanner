@@ -36,7 +36,7 @@ Key features:
   - [Testing](#testing)
 
 ## Prerequisites
-- **Go**: Version 1.20 or higher (for local development and testing).
+- **Go**: Version 1.24 or higher (for local development and testing).
 - **Docker**: For building and running the application in a container.
 - **GitHub Personal Access Token**: Required for GitHub API access (with `repo` scope for private repositories).
 - **Git**: For cloning the repository.
